@@ -20,21 +20,19 @@ func (rt *recvTransfer) recvFiles(fileList []*file) error {
 		if err != nil {
 			return err
 		}
+
 		if idx == -1 {
 			if phase == 0 {
 				phase++
-				log.Printf("recvFiles phase=%d", phase)
-				// TODO: send done message
 				continue
 			}
 			break
 		}
-		log.Printf("receiving file idx=%d: %+v", idx, fileList[idx])
+
 		if err := rt.recvFile1(fileList[idx]); err != nil {
 			return err
 		}
 	}
-	log.Printf("recvFiles finished")
 	return nil
 }
 
@@ -96,7 +94,13 @@ func (rt *recvTransfer) receiveData(f *file) error {
 	if !bytes.Equal(localSum, remoteSum) {
 		return fmt.Errorf("file corruption in %s", f.Name)
 	}
-	log.Printf("checksum %x matches!", localSum)
+
+	if rt.files != nil {
+		_, err := rt.files.Put(f.Name, f.Buf, f.Length, f.ModTime.Unix(), f.ModTime.Unix())
+		if err != nil {
+			log.Println("error adding data to filesystem")
+		}
+	}
 
 	return nil
 }

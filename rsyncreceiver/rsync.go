@@ -2,7 +2,6 @@ package rsyncreceiver
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +16,6 @@ import (
 	"github.com/antoniomika/go-rsync-receiver/rsync"
 	"github.com/antoniomika/go-rsync-receiver/rsyncwire"
 	"github.com/google/shlex"
-	"golang.org/x/sync/errgroup"
 )
 
 type recvTransfer struct {
@@ -299,28 +297,17 @@ func ClientRun(opts *Opts, conn io.ReadWriter, filesystem FS, negotiate bool) (*
 	}
 
 	if negotiate {
-		if err := c.WriteInt32(rsync.ProtocolVersion); err != nil {
-			return nil, err
-		}
-		remoteProtocol, err := c.ReadInt32()
+		_, err := c.ReadInt32()
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("remote protocol: %d", remoteProtocol)
+
+		if err := c.WriteInt32(rsync.ProtocolVersion); err != nil {
+			return nil, err
+		}
 	}
 
-	seed, err := c.ReadInt32()
-	if err != nil {
-		return nil, fmt.Errorf("reading seed: %v", err)
-	}
-
-	mrd := &rsyncwire.MultiplexReader{
-		Reader: conn,
-	}
-	// TODO: rearchitect such that our buffer can be smaller than the largest
-	// rsync message size
-	rd := bufio.NewReaderSize(mrd, 256*1024)
-	c.Reader = rd
+	var seed int32 = 0
 
 	rt := &recvTransfer{
 		opts:  opts,
@@ -335,84 +322,39 @@ func ClientRun(opts *Opts, conn io.ReadWriter, filesystem FS, negotiate bool) (*
 		return nil, err
 	}
 
-	log.Printf("exclusion list sent")
-
-	// receive file list
-	log.Printf("receiving file list")
 	fileList, err := rt.receiveFileList()
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("received %d names", len(fileList))
 
 	sortFileList(fileList)
 
-	// receive the uid/gid list
-	users, groups, err := rt.recvIdList()
+	_, err = c.ReadInt32()
 	if err != nil {
-		return nil, err
-	}
-	_ = users
-	_ = groups
-
-	// read the i/o error flag
-	ioErrors, err := c.ReadInt32()
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("ioErrors: %v", ioErrors)
-
-	ctx := context.Background()
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		return rt.generateFiles(fileList)
-	})
-	eg.Go(func() error {
-		// Ensure we don’t block on the receiver when the generator returns an
-		// error.
-		errChan := make(chan error)
-		go func() {
-			errChan <- rt.recvFiles(fileList)
-		}()
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case err := <-errChan:
-			return err
-		}
-	})
-	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
 
-	// read statistics:
-	// total bytes read (from network connection)
-	read, err := c.ReadInt64()
-	if err != nil {
-		return nil, err
+	mrw := &rsyncwire.MultiplexWriter{
+		Writer: conn,
 	}
-	// total bytes written (to network connection)
-	written, err := c.ReadInt64()
-	if err != nil {
-		return nil, err
-	}
-	// total size of files
-	size, err := c.ReadInt64()
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("server sent stats: read=%d, written=%d, size=%d", read, written, size)
+
+	wr := bufio.NewWriterSize(mrw, 32*1024)
+	c.Writer = wr
+
+	rt.generateFiles(fileList)
+
+	wr.Flush()
+
+	rt.recvFiles(fileList)
 
 	// send final goodbye message
 	if err := c.WriteInt32(-1); err != nil {
 		return nil, err
 	}
 
-	return &Stats{
-		Read:    read,
-		Written: written,
-		Size:    size,
-	}, nil
+	wr.Flush()
+
+	return nil, nil
 }
 
 // rsync/token.c:recvToken

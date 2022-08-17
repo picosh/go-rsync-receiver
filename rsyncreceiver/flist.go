@@ -9,8 +9,6 @@ import (
 	"sort"
 	"time"
 
-	"log"
-
 	"github.com/antoniomika/go-rsync-receiver/rsync"
 )
 
@@ -92,7 +90,7 @@ func (rt *recvTransfer) receiveFileEntry(flags uint16, last *file) (*file, error
 	}
 	b := make([]byte, l1+l2)
 	readb := b
-	if l1 > 0 {
+	if l1 > 0 && last != nil {
 		copy(b, []byte(last.Name))
 		readb = b[l1:]
 	}
@@ -109,7 +107,7 @@ func (rt *recvTransfer) receiveFileEntry(flags uint16, last *file) (*file, error
 	}
 	f.Length = length
 
-	if flags&rsync.XMIT_SAME_TIME != 0 {
+	if flags&rsync.XMIT_SAME_TIME != 0 && last != nil {
 		f.ModTime = last.ModTime
 	} else {
 		modTime, err := rt.conn.ReadInt32()
@@ -119,7 +117,7 @@ func (rt *recvTransfer) receiveFileEntry(flags uint16, last *file) (*file, error
 		f.ModTime = time.Unix(int64(modTime), 0)
 	}
 
-	if flags&rsync.XMIT_SAME_MODE != 0 {
+	if flags&rsync.XMIT_SAME_MODE != 0 && last != nil {
 		f.Mode = last.Mode
 	} else {
 		mode, err := rt.conn.ReadInt32()
@@ -127,60 +125,6 @@ func (rt *recvTransfer) receiveFileEntry(flags uint16, last *file) (*file, error
 			return nil, err
 		}
 		f.Mode = mode
-	}
-
-	if rt.opts.PreserveUid {
-		if flags&rsync.XMIT_SAME_UID != 0 {
-			f.Uid = last.Uid
-		} else {
-			uid, err := rt.conn.ReadInt32()
-			if err != nil {
-				return nil, err
-			}
-			f.Uid = uid
-		}
-	}
-
-	if rt.opts.PreserveGid {
-		if flags&rsync.XMIT_SAME_GID != 0 {
-			f.Gid = last.Gid
-		} else {
-			gid, err := rt.conn.ReadInt32()
-			if err != nil {
-				return nil, err
-			}
-			f.Gid = gid
-		}
-	}
-
-	mode := f.Mode & rsync.S_IFMT
-	isDev := mode == rsync.S_IFCHR || mode == rsync.S_IFBLK
-	isSpecial := mode == rsync.S_IFIFO || mode == rsync.S_IFSOCK
-	isLink := mode == rsync.S_IFLNK
-
-	if rt.opts.PreserveDevices && (isDev || isSpecial) {
-		// TODO(protocol >= 28): rdev/major/minor handling
-		if flags&rsync.XMIT_SAME_RDEV_pre28 != 0 {
-			f.Rdev = last.Rdev
-		} else {
-			rdev, err := rt.conn.ReadInt32()
-			if err != nil {
-				return nil, err
-			}
-			f.Rdev = rdev
-		}
-	}
-
-	if rt.opts.PreserveLinks && isLink {
-		length, err := rt.conn.ReadInt32()
-		if err != nil {
-			return nil, err
-		}
-		b := make([]byte, length)
-		if _, err := io.ReadFull(rt.conn.Reader, b); err != nil {
-			return nil, err
-		}
-		f.LinkTarget = string(b)
 	}
 
 	return f, nil
@@ -195,26 +139,18 @@ func (rt *recvTransfer) receiveFileList() ([]*file, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		if b == 0 {
 			break
 		}
 		flags := uint16(b)
-		// log.Printf("flags: %x", flags)
-		// TODO(protocol >= 28): extended flags
 
 		f, err := rt.receiveFileEntry(flags, lastFileEntry)
 		if err != nil {
 			return nil, err
 		}
+
 		lastFileEntry = f
-		// TODO: include depth in output?
-		log.Printf("[Receiver] i=%d ? %s mode=%o len=%d uid=%d gid=%d flags=?",
-			len(fileList),
-			f.Name,
-			f.Mode,
-			f.Length,
-			f.Uid,
-			f.Gid)
 		fileList = append(fileList, f)
 	}
 	return fileList, nil

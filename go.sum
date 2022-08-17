@@ -4,5 +4,3 @@ github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 h1:El6M4kTTCOh6aBiKaU
 github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510/go.mod h1:pupxD2MaaD3pAXIBCelhxNneeOaAeabZDe5s4K6zSpQ=
 github.com/mmcloughlin/md4 v0.1.2 h1:kGYl+iNbxhyz4u76ka9a+0TXP9KWt/LmnM0QhZwhcBo=
 github.com/mmcloughlin/md4 v0.1.2/go.mod h1:AAxFX59fddW0IguqNzWlf1lazh1+rXeIt/Bj49cqDTQ=
-golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 h1:uVc8UZUe6tr40fFVnUP5Oj+veunVezqYl9z7DYw9xzw=
-golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=

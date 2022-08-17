@@ -41,7 +41,7 @@ type MultiplexReader struct {
 // rsync.h defines IO_BUFFER_SIZE as 32 * 1024, but gokr-rsyncd increases it to
 // 256K. Since we use this as the maximum message size, too, we need to at least
 // match it.
-const ioBufferSize = 256 * 1024
+const ioBufferSize = 32 * 1024
 const maxMessageSize = ioBufferSize
 
 func (w *MultiplexReader) ReadMsg() (tag uint8, p []byte, err error) {
@@ -92,8 +92,8 @@ type Buffer struct {
 	buf bytes.Buffer
 }
 
-func (b *Buffer) WriteByte(data byte) {
-	binary.Write(&b.buf, binary.LittleEndian, data)
+func (b *Buffer) WriteByte(data byte) error {
+	return binary.Write(&b.buf, binary.LittleEndian, data)
 }
 
 func (b *Buffer) WriteInt32(data int32) {
