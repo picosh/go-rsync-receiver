@@ -4,14 +4,18 @@ import (
 	"errors"
 
 	"github.com/antoniomika/go-rsync-receiver/rsync"
+	"github.com/antoniomika/go-rsync-receiver/utils"
 )
 
 // rsync/generator.c:generate_files()
-func (rt *recvTransfer) generateFiles(fileList []*file) error {
+func (rt *recvTransfer) generateFiles(fileList []*utils.ReceiverFile) error {
 	phase := 0
 	for idx, f := range fileList {
 		// TODO: use a copy of f with .Mode |= S_IWUSR for directories, so
 		// that we can create files within all directories.
+		if rt.files != nil && rt.files.Skip(f) {
+			continue
+		}
 
 		if err := rt.recvGenerator(idx, f); err != nil {
 			return err
@@ -32,7 +36,7 @@ func (rt *recvTransfer) generateFiles(fileList []*file) error {
 }
 
 // rsync/generator.c:recv_generator
-func (rt *recvTransfer) recvGenerator(idx int, f *file) error {
+func (rt *recvTransfer) recvGenerator(idx int, f *utils.ReceiverFile) error {
 	if !f.FileMode().IsRegular() {
 		// None of the Preserve* options is enabled, so just skip over
 		// non-regular files.

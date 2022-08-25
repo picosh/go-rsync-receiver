@@ -15,13 +15,14 @@ import (
 
 	"github.com/antoniomika/go-rsync-receiver/rsync"
 	"github.com/antoniomika/go-rsync-receiver/rsyncwire"
+	"github.com/antoniomika/go-rsync-receiver/utils"
 	"github.com/google/shlex"
 )
 
 type recvTransfer struct {
 	// config
 	opts  *Opts
-	files FS
+	files utils.FS
 
 	// state
 	conn *rsyncwire.Conn
@@ -145,7 +146,7 @@ func checkForHostspec(src string) (host, path string, port int, _ error) {
 }
 
 // rsync/main.c:start_client
-func rsyncMain(opts *Opts, sources []string, dest string, filesystem FS) (*Stats, error) {
+func rsyncMain(opts *Opts, sources []string, dest string, filesystem utils.FS) (*Stats, error) {
 	log.Printf("dest: %q, sources: %q", dest, sources)
 	log.Printf("opts: %+v", opts)
 	for _, src := range sources {
@@ -290,7 +291,7 @@ func doCmd(opts *Opts, machine, user, path string, daemonConnection int) (io.Rea
 }
 
 // rsync/main.c:client_run
-func ClientRun(opts *Opts, conn io.ReadWriter, filesystem FS, negotiate bool) (*Stats, error) {
+func ClientRun(opts *Opts, conn io.ReadWriter, filesystem utils.FS, negotiate bool) (*Stats, error) {
 	c := &rsyncwire.Conn{
 		Reader: conn,
 		Writer: conn,

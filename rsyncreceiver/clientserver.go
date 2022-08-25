@@ -12,10 +12,11 @@ import (
 	"log"
 
 	"github.com/antoniomika/go-rsync-receiver/rsync"
+	"github.com/antoniomika/go-rsync-receiver/utils"
 )
 
 // rsync/clientserver.c:start_socket_client
-func socketClient(opts *Opts, src, dest string, filesystem FS) (*Stats, error) {
+func socketClient(opts *Opts, src, dest string, filesystem utils.FS) (*Stats, error) {
 	u, err := url.Parse(src)
 	if err != nil {
 		return nil, err

@@ -9,11 +9,12 @@ import (
 	"log"
 
 	"github.com/antoniomika/go-rsync-receiver/rsync"
+	"github.com/antoniomika/go-rsync-receiver/utils"
 	"github.com/mmcloughlin/md4"
 )
 
 // rsync/receiver.c:recv_files
-func (rt *recvTransfer) recvFiles(fileList []*file) error {
+func (rt *recvTransfer) recvFiles(fileList []*utils.ReceiverFile) error {
 	phase := 0
 	for {
 		idx, err := rt.conn.ReadInt32()
@@ -36,7 +37,7 @@ func (rt *recvTransfer) recvFiles(fileList []*file) error {
 	return nil
 }
 
-func (rt *recvTransfer) recvFile1(f *file) error {
+func (rt *recvTransfer) recvFile1(f *utils.ReceiverFile) error {
 	if err := rt.receiveData(f); err != nil {
 		return err
 	}
@@ -44,7 +45,7 @@ func (rt *recvTransfer) recvFile1(f *file) error {
 }
 
 // rsync/receiver.c:receive_data
-func (rt *recvTransfer) receiveData(f *file) error {
+func (rt *recvTransfer) receiveData(f *utils.ReceiverFile) error {
 	f.Buf = bytes.NewBuffer(nil)
 
 	var sh rsync.SumHead

@@ -1,62 +1,26 @@
 package rsyncreceiver
 
 import (
-	"bytes"
 	"fmt"
 	"io"
-	"io/fs"
 	"path/filepath"
 	"sort"
 	"time"
 
 	"github.com/antoniomika/go-rsync-receiver/rsync"
+	"github.com/antoniomika/go-rsync-receiver/utils"
 )
 
 // rsync/flist.c:flist_sort_and_clean
-func sortFileList(fileList []*file) {
+func sortFileList(fileList []*utils.ReceiverFile) {
 	sort.Slice(fileList, func(i, j int) bool {
 		return fileList[i].Name < fileList[j].Name
 	})
 }
 
-type file struct {
-	Name       string
-	Length     int64
-	ModTime    time.Time
-	Mode       int32
-	Uid        int32
-	Gid        int32
-	LinkTarget string
-	Rdev       int32
-	Buf        *bytes.Buffer
-}
-
-// FileMode converts from the Linux permission bits to Go’s permission bits.
-func (f *file) FileMode() fs.FileMode {
-	ret := fs.FileMode(f.Mode) & fs.ModePerm
-
-	mode := f.Mode & rsync.S_IFMT
-	switch mode {
-	case rsync.S_IFCHR:
-		ret |= fs.ModeCharDevice
-	case rsync.S_IFBLK:
-		ret |= fs.ModeDevice
-	case rsync.S_IFIFO:
-		ret |= fs.ModeNamedPipe
-	case rsync.S_IFSOCK:
-		ret |= fs.ModeSocket
-	case rsync.S_IFLNK:
-		ret |= fs.ModeSymlink
-	case rsync.S_IFDIR:
-		ret |= fs.ModeDir
-	}
-
-	return ret
-}
-
 // rsync/flist.c:receive_file_entry
-func (rt *recvTransfer) receiveFileEntry(flags uint16, last *file) (*file, error) {
-	f := &file{}
+func (rt *recvTransfer) receiveFileEntry(flags uint16, last *utils.ReceiverFile) (*utils.ReceiverFile, error) {
+	f := &utils.ReceiverFile{}
 
 	var l1 int
 	if flags&rsync.XMIT_SAME_NAME != 0 {
@@ -131,9 +95,9 @@ func (rt *recvTransfer) receiveFileEntry(flags uint16, last *file) (*file, error
 }
 
 // rsync/flist.c:recv_file_list
-func (rt *recvTransfer) receiveFileList() ([]*file, error) {
-	var lastFileEntry *file
-	var fileList []*file
+func (rt *recvTransfer) receiveFileList() ([]*utils.ReceiverFile, error) {
+	var lastFileEntry *utils.ReceiverFile
+	var fileList []*utils.ReceiverFile
 	for {
 		b, err := rt.conn.ReadByte()
 		if err != nil {
