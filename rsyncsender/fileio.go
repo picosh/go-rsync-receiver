@@ -3,7 +3,6 @@ package rsyncsender
 import (
 	"bytes"
 	"io"
-	"os"
 )
 
 // rsync.h:map_struct
@@ -42,11 +41,8 @@ func mapFile(f *bytes.Reader, len int64, readSize int32, blkSize int32) *mapStru
 
 func (ms *mapStruct) ptr(offset int64, l int32) []byte {
 	len := int64(l)
-	if len == 0 {
+	if len == 0 || len < 0 {
 		return nil
-	}
-	if len < 0 {
-		os.Exit(1)
 	}
 
 	if offset >= ms.pOffset && offset+int64(len) <= ms.pOffset+int64(ms.pLen) {
@@ -83,11 +79,11 @@ func (ms *mapStruct) ptr(offset int64, l int32) []byte {
 		copy(ms.window[:], ms.window[off:off+readOffset])
 	}
 	if readSize <= 0 {
-		os.Exit(1)
+		return nil
 	}
 	if ms.pFdOffset != readStart {
 		if _, err := ms.f.Seek(readStart, io.SeekStart); err != nil {
-			os.Exit(1)
+			return nil
 		}
 		ms.pFdOffset = readStart
 	}
@@ -97,8 +93,6 @@ func (ms *mapStruct) ptr(offset int64, l int32) []byte {
 		n, err := ms.f.Read(ms.window[readOffset : readOffset+readSize])
 		if err != nil {
 			ms.err = err
-			// TODO: zero the buffer, file has changed mid-transfer
-			os.Exit(1)
 			break
 		}
 		ms.pFdOffset += int64(n)
