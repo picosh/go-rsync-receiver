@@ -15,7 +15,7 @@ import (
 
 // rsync/match.c:hash_search
 func (st *sendTransfer) hashSearch(targets []target, tagTable map[uint16]int, head rsync.SumHead, fileIndex int32, fl *utils.SenderFile) error {
-	fi, f, err := st.filesystem.Read(fl.WPath)
+	fi, f, err := st.filesystem.Read(fl)
 	if err != nil {
 		return err
 	}

@@ -140,7 +140,7 @@ func (st *sendTransfer) sendFile(fileIndex int32, fl *utils.SenderFile) error {
 	// increases throughput with “tridge” rsync as client by 50 Mbit/s.
 	const chunkSize = 32 * 1024
 
-	fi, f, err := st.filesystem.Read(fl.WPath)
+	fi, f, err := st.filesystem.Read(fl)
 	if err != nil {
 		return err
 	}

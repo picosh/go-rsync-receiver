@@ -97,7 +97,7 @@ func (rt *recvTransfer) receiveData(f *utils.ReceiverFile) error {
 	}
 
 	if rt.files != nil {
-		_, err := rt.files.Put(f.Name, f.Buf, f.Length, f.ModTime.Unix(), f.ModTime.Unix())
+		_, err := rt.files.Put(f)
 		if err != nil {
 			log.Println("error adding data to filesystem")
 		}
