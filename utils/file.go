@@ -5,7 +5,7 @@ import (
 	"io/fs"
 	"time"
 
-	"github.com/antoniomika/go-rsync-receiver/rsync"
+	"github.com/picosh/go-rsync-receiver/rsync"
 )
 
 type SenderFile struct {

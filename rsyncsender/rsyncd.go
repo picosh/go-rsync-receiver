@@ -6,9 +6,9 @@ import (
 	"io"
 	"sort"
 
-	"github.com/antoniomika/go-rsync-receiver/rsync"
-	"github.com/antoniomika/go-rsync-receiver/rsyncwire"
-	"github.com/antoniomika/go-rsync-receiver/utils"
+	"github.com/picosh/go-rsync-receiver/rsync"
+	"github.com/picosh/go-rsync-receiver/rsyncwire"
+	"github.com/picosh/go-rsync-receiver/utils"
 )
 
 type sendTransfer struct {

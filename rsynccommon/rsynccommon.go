@@ -5,7 +5,7 @@ package rsynccommon
 import (
 	"math"
 
-	"github.com/antoniomika/go-rsync-receiver/rsync"
+	"github.com/picosh/go-rsync-receiver/rsync"
 )
 
 const blockSize = 700 // rsync/rsync.h

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/antoniomika/go-rsync-receiver/rsyncchecksum"
+	"github.com/picosh/go-rsync-receiver/rsyncchecksum"
 )
 
 func constructLargeDataFile(headPattern, bodyPattern, endPattern []byte) []byte {

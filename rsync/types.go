@@ -1,6 +1,6 @@
 package rsync
 
-import "github.com/antoniomika/go-rsync-receiver/rsyncwire"
+import "github.com/picosh/go-rsync-receiver/rsyncwire"
 
 // rsync/rsync.h:struct sum_buf
 type SumBuf struct {

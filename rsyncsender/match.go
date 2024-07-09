@@ -7,10 +7,10 @@ import (
 	"hash"
 	"io"
 
-	"github.com/antoniomika/go-rsync-receiver/rsync"
-	"github.com/antoniomika/go-rsync-receiver/rsyncchecksum"
-	"github.com/antoniomika/go-rsync-receiver/utils"
 	"github.com/mmcloughlin/md4"
+	"github.com/picosh/go-rsync-receiver/rsync"
+	"github.com/picosh/go-rsync-receiver/rsyncchecksum"
+	"github.com/picosh/go-rsync-receiver/utils"
 )
 
 // rsync/match.c:hash_search
