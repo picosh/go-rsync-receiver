@@ -1,4 +1,4 @@
-module github.com/antoniomika/go-rsync-receiver
+module github.com/picosh/go-rsync-receiver
 
 go 1.18
 
