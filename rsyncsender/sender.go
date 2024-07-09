@@ -141,6 +141,7 @@ func (st *sendTransfer) sendFile(fileIndex int32, fl *utils.SenderFile) error {
 	const chunkSize = 32 * 1024
 
 	fi, f, err := st.filesystem.Read(fl)
+	defer f.Close()
 	if err != nil {
 		return err
 	}
