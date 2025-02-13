@@ -42,7 +42,7 @@ func socketClient(opts *Opts, src, dest string, filesystem utils.FS) (*Stats, er
 	if err := startInbandExchange(opts, conn, module, path); err != nil {
 		return nil, err
 	}
-	stats, err := ClientRun(opts, conn, filesystem, false)
+	stats, _, err := ClientRun(opts, conn, filesystem, false)
 	if err != nil {
 		return nil, err
 	}

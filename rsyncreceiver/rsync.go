@@ -203,7 +203,7 @@ func rsyncMain(opts *Opts, sources []string, dest string, filesystem utils.FS) (
 				}
 				negotiate = false // already done
 			}
-			stats, err := ClientRun(opts, conn, filesystem, negotiate)
+			stats, _, err := ClientRun(opts, conn, filesystem, negotiate)
 			if err != nil {
 				return nil, err
 			}
@@ -291,7 +291,7 @@ func doCmd(opts *Opts, machine, user, path string, daemonConnection int) (io.Rea
 }
 
 // rsync/main.c:client_run
-func ClientRun(opts *Opts, conn io.ReadWriter, filesystem utils.FS, negotiate bool) (*Stats, error) {
+func ClientRun(opts *Opts, conn io.ReadWriter, filesystem utils.FS, negotiate bool) (*Stats, []*utils.ReceiverFile, error) {
 	c := &rsyncwire.Conn{
 		Reader: conn,
 		Writer: conn,
@@ -300,11 +300,11 @@ func ClientRun(opts *Opts, conn io.ReadWriter, filesystem utils.FS, negotiate bo
 	if negotiate {
 		_, err := c.ReadInt32()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		if err := c.WriteInt32(rsync.ProtocolVersion); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -320,19 +320,19 @@ func ClientRun(opts *Opts, conn io.ReadWriter, filesystem utils.FS, negotiate bo
 	// TODO: implement support for exclusion, send exclusion list here
 	const exclusionListEnd = 0
 	if err := c.WriteInt32(exclusionListEnd); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	fileList, err := rt.receiveFileList()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	sortFileList(fileList)
 
 	_, err = c.ReadInt32()
 	if err != nil {
-		return nil, err
+		return nil, fileList, err
 	}
 
 	mrw := &rsyncwire.MultiplexWriter{
@@ -350,12 +350,12 @@ func ClientRun(opts *Opts, conn io.ReadWriter, filesystem utils.FS, negotiate bo
 
 	// send final goodbye message
 	if err := c.WriteInt32(-1); err != nil {
-		return nil, err
+		return nil, fileList, err
 	}
 
 	wr.Flush()
 
-	return nil, nil
+	return nil, fileList, nil
 }
 
 // rsync/token.c:recvToken

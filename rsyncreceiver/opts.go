@@ -28,6 +28,7 @@ type Opts struct {
 	DryRun           bool
 	D                bool
 	ShellCommand     string
+	Delete           bool
 }
 
 func NewGetOpt() (*Opts, *getoptions.GetOpt) {
@@ -66,6 +67,7 @@ func NewGetOpt() (*Opts, *getoptions.GetOpt) {
 	// TODO: implement IgnoreTimes
 	opt.BoolVar(&opts.IgnoreTimes, "ignore-times", false, opt.Alias("I"))
 	opt.BoolVar(&opts.DryRun, "dry-run", false, opt.Alias("n"))
+	opt.BoolVar(&opts.Delete, "delete", false)
 
 	opt.StringVar(&opts.ShellCommand, "rsh", "", opt.Alias("e"))
 
