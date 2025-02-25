@@ -1,8 +1,9 @@
 package utils
 
 import (
-	"bytes"
+	"io"
 	"io/fs"
+	"sort"
 	"time"
 
 	"github.com/picosh/go-rsync-receiver/rsync"
@@ -24,7 +25,7 @@ type ReceiverFile struct {
 	Gid        int32
 	LinkTarget string
 	Rdev       int32
-	Buf        *bytes.Buffer
+	Reader     io.Reader
 }
 
 // FileMode converts from the Linux permission bits to Go’s permission bits.
@@ -48,4 +49,19 @@ func (f *ReceiverFile) FileMode() fs.FileMode {
 	}
 
 	return ret
+}
+
+// rsync/flist.c:flist_sort_and_clean
+func SortFileList(fileList []*ReceiverFile) {
+	sort.Slice(fileList, func(i, j int) bool {
+		return fileList[i].Name < fileList[j].Name
+	})
+}
+
+// rsync/receiver.c:delete_files
+func FindInFileList(fileList []*ReceiverFile, name string) bool {
+	i := sort.Search(len(fileList), func(i int) bool {
+		return fileList[i].Name >= name
+	})
+	return i < len(fileList) && fileList[i].Name == name
 }

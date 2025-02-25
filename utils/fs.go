@@ -6,6 +6,7 @@ import (
 )
 
 type ReaderAtCloser interface {
+	io.Reader
 	io.ReaderAt
 	io.Closer
 }
@@ -16,4 +17,5 @@ type FS interface {
 	Skip(*ReceiverFile) bool
 	List(string) ([]os.FileInfo, error)
 	Read(*SenderFile) (os.FileInfo, ReaderAtCloser, error)
+	Remove(*ReceiverFile) error
 }
