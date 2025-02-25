@@ -17,5 +17,5 @@ type FS interface {
 	Skip(*ReceiverFile) bool
 	List(string) ([]os.FileInfo, error)
 	Read(*SenderFile) (os.FileInfo, ReaderAtCloser, error)
-	Remove(*ReceiverFile) error
+	Remove([]*ReceiverFile) error
 }

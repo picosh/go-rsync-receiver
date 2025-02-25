@@ -100,7 +100,7 @@ func (rt *Transfer) recvGenerator(idx int, f *utils.ReceiverFile) error {
 	}
 
 	if err != nil {
-		log.Printf("failed to open %s, continuing: %v", st, err)
+		log.Printf("failed to open %+v (%s), continuing: %v", st, f.Name, err)
 		return requestFullFile()
 	}
 

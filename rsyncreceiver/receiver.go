@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sync"
 
 	"log"
 
@@ -60,7 +61,6 @@ func (rt *Transfer) recvFile1(f *utils.ReceiverFile) error {
 func (rt *Transfer) openLocalFile(f *utils.ReceiverFile) (utils.ReaderAtCloser, error) {
 	_, r, err := rt.files.Read(&utils.SenderFile{
 		Path:    f.Name,
-		WPath:   f.Name,
 		Regular: true,
 	})
 
@@ -82,7 +82,17 @@ func (rt *Transfer) receiveData(f *utils.ReceiverFile, localFile utils.ReaderAtC
 
 	f.Reader = r
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	go func() {
+		defer func() {
+			wg.Done()
+			if err := r.Close(); err != nil {
+				return
+			}
+		}()
+
 		_, err := rt.files.Put(f)
 		if err != nil {
 			return
@@ -126,6 +136,13 @@ func (rt *Transfer) receiveData(f *utils.ReceiverFile, localFile utils.ReaderAtC
 			return err
 		}
 	}
+
+	if err := w.Close(); err != nil {
+		return err
+	}
+
+	wg.Wait()
+
 	localSum := h.Sum(nil)
 	remoteSum := make([]byte, len(localSum))
 	if _, err := io.ReadFull(rt.Conn.Reader, remoteSum); err != nil {
@@ -135,14 +152,6 @@ func (rt *Transfer) receiveData(f *utils.ReceiverFile, localFile utils.ReaderAtC
 		return fmt.Errorf("file corruption in %s", f.Name)
 	}
 	log.Printf("checksum %x matches!", localSum)
-
-	if err := w.Close(); err != nil {
-		return err
-	}
-
-	if err := r.Close(); err != nil {
-		return err
-	}
 
 	return nil
 }

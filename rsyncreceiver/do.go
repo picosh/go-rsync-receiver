@@ -2,7 +2,6 @@ package rsyncreceiver
 
 import (
 	"context"
-	"os"
 
 	"log"
 
@@ -29,20 +28,7 @@ func (rt *Transfer) deleteFiles(fileList []*utils.ReceiverFile) error {
 		return nil
 	}
 
-	for _, f := range fileList {
-		if !isTopDir(f) {
-			continue
-		}
-		log.Printf("deleting in %s", f.Name)
-		err := rt.files.Remove(f)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil // destination does not exist, nothing to do
-			}
-			return err
-		}
-	}
-	return nil
+	return rt.files.Remove(fileList)
 }
 
 // rsync/main.c:do_recv
