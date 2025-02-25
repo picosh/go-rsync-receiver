@@ -11,17 +11,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func isTopDir(f *utils.ReceiverFile) bool {
-	// TODO: once we check the f.Flags:
-	// if !f.FileMode().IsDir() {
-	//    // non-directories can get the top_dir flag set,
-	//    // but it must be ignored (only for protocol reasons).
-	//   return false
-	// }
-	// return (f.Flags & TOP_DIR) != 0
-	return f.Name == "."
-}
-
 func (rt *Transfer) deleteFiles(fileList []*utils.ReceiverFile) error {
 	if rt.IOErrors > 0 {
 		log.Printf("IO error encountered, skipping file deletion")

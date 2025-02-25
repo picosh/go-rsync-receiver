@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 	"os/user"
-	"path/filepath"
 	"strconv"
 	"sync"
 
@@ -56,7 +55,7 @@ func (st *Transfer) SendFileList(opts *rsyncopts.Options, paths []string, excl *
 
 			// log.Printf("Trim(path=%q, %q) = %q", path, strip, name)
 			name := info.Name()
-			path := filepath.Join(requested, name)
+			path := name
 			if name == "/" {
 				name = "."
 				flags |= rsync.XMIT_TOP_DIR
@@ -68,7 +67,7 @@ func (st *Transfer) SendFileList(opts *rsyncopts.Options, paths []string, excl *
 			}
 
 			fileList.Files = append(fileList.Files, utils.SenderFile{
-				Path:    path,
+				Path:    "/",
 				Regular: info.Mode().IsRegular(),
 				WPath:   name,
 			})
