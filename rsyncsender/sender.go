@@ -157,14 +157,6 @@ func (st *Transfer) sendFile(fileIndex int32, fl utils.SenderFile) error {
 	}
 	defer r.Close()
 
-	var writer io.Writer = st.Conn.Writer
-
-	// if st.Opts.Compress() {
-	// 	zlibWriter := zlib.NewWriter(st.Conn.Writer)
-	// 	defer zlibWriter.Close()
-	// 	writer = zlibWriter
-	// }
-
 	if err := st.Conn.WriteInt32(fileIndex); err != nil {
 		return err
 	}
@@ -190,6 +182,11 @@ func (st *Transfer) sendFile(fileIndex int32, fl utils.SenderFile) error {
 			}
 		}
 		chunk := buf[:n]
+
+		if len(chunk) == 0 {
+			break
+		}
+
 		_, err = h.Write(chunk)
 		if err != nil {
 			return err
@@ -198,7 +195,7 @@ func (st *Transfer) sendFile(fileIndex int32, fl utils.SenderFile) error {
 		if err := st.Conn.WriteInt32(int32(len(chunk))); err != nil {
 			return err
 		}
-		if _, err := writer.Write(chunk); err != nil {
+		if _, err := st.Conn.Writer.Write(chunk); err != nil {
 			return err
 		}
 
