@@ -4,27 +4,21 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
 	"time"
+
+	"log"
 
 	"github.com/picosh/go-rsync-receiver/rsync"
 	"github.com/picosh/go-rsync-receiver/utils"
 )
 
-// rsync/flist.c:flist_sort_and_clean
-func sortFileList(fileList []*utils.ReceiverFile) {
-	sort.Slice(fileList, func(i, j int) bool {
-		return fileList[i].Name < fileList[j].Name
-	})
-}
-
 // rsync/flist.c:receive_file_entry
-func (rt *recvTransfer) receiveFileEntry(flags uint16, last *utils.ReceiverFile) (*utils.ReceiverFile, error) {
+func (rt *Transfer) receiveFileEntry(flags uint16, last *utils.ReceiverFile) (*utils.ReceiverFile, error) {
 	f := &utils.ReceiverFile{}
 
 	var l1 int
 	if flags&rsync.XMIT_SAME_NAME != 0 {
-		l, err := rt.conn.ReadByte()
+		l, err := rt.Conn.ReadByte()
 		if err != nil {
 			return nil, err
 		}
@@ -33,13 +27,13 @@ func (rt *recvTransfer) receiveFileEntry(flags uint16, last *utils.ReceiverFile)
 
 	var l2 int
 	if flags&rsync.XMIT_LONG_NAME != 0 {
-		l, err := rt.conn.ReadInt32()
+		l, err := rt.Conn.ReadInt32()
 		if err != nil {
 			return nil, err
 		}
 		l2 = int(l)
 	} else {
-		l, err := rt.conn.ReadByte()
+		l, err := rt.Conn.ReadByte()
 		if err != nil {
 			return nil, err
 		}
@@ -54,68 +48,151 @@ func (rt *recvTransfer) receiveFileEntry(flags uint16, last *utils.ReceiverFile)
 	}
 	b := make([]byte, l1+l2)
 	readb := b
-	if l1 > 0 && last != nil {
+	if l1 > 0 {
 		copy(b, []byte(last.Name))
 		readb = b[l1:]
 	}
-	if _, err := io.ReadFull(rt.conn.Reader, readb); err != nil {
+	if _, err := io.ReadFull(rt.Conn.Reader, readb); err != nil {
 		return nil, err
 	}
 	// TODO: does rsync’s clean_fname() and sanitize_path() combination do
 	// anything more than Go’s filepath.Clean()?
 	f.Name = filepath.Clean(string(b))
 
-	length, err := rt.conn.ReadInt64()
+	length, err := rt.Conn.ReadInt64()
 	if err != nil {
 		return nil, err
 	}
 	f.Length = length
 
-	if flags&rsync.XMIT_SAME_TIME != 0 && last != nil {
+	if flags&rsync.XMIT_SAME_TIME != 0 {
 		f.ModTime = last.ModTime
 	} else {
-		modTime, err := rt.conn.ReadInt32()
+		modTime, err := rt.Conn.ReadInt32()
 		if err != nil {
 			return nil, err
 		}
 		f.ModTime = time.Unix(int64(modTime), 0)
 	}
 
-	if flags&rsync.XMIT_SAME_MODE != 0 && last != nil {
+	if flags&rsync.XMIT_SAME_MODE != 0 {
 		f.Mode = last.Mode
 	} else {
-		mode, err := rt.conn.ReadInt32()
+		mode, err := rt.Conn.ReadInt32()
 		if err != nil {
 			return nil, err
 		}
 		f.Mode = mode
 	}
 
+	if rt.Opts.PreserveUid {
+		if flags&rsync.XMIT_SAME_UID != 0 {
+			f.Uid = last.Uid
+		} else {
+			uid, err := rt.Conn.ReadInt32()
+			if err != nil {
+				return nil, err
+			}
+			f.Uid = uid
+		}
+	}
+
+	if rt.Opts.PreserveGid {
+		if flags&rsync.XMIT_SAME_GID != 0 {
+			f.Gid = last.Gid
+		} else {
+			gid, err := rt.Conn.ReadInt32()
+			if err != nil {
+				return nil, err
+			}
+			f.Gid = gid
+		}
+	}
+
+	mode := f.Mode & rsync.S_IFMT
+	isDev := mode == rsync.S_IFCHR || mode == rsync.S_IFBLK
+	isSpecial := mode == rsync.S_IFIFO || mode == rsync.S_IFSOCK
+	isLink := mode == rsync.S_IFLNK
+
+	if rt.Opts.PreserveDevices && (isDev || isSpecial) {
+		// TODO(protocol >= 28): rdev/major/minor handling
+		if flags&rsync.XMIT_SAME_RDEV_pre28 != 0 {
+			f.Rdev = last.Rdev
+		} else {
+			rdev, err := rt.Conn.ReadInt32()
+			if err != nil {
+				return nil, err
+			}
+			f.Rdev = rdev
+		}
+	}
+
+	if rt.Opts.PreserveLinks && isLink {
+		length, err := rt.Conn.ReadInt32()
+		if err != nil {
+			return nil, err
+		}
+		b := make([]byte, length)
+		if _, err := io.ReadFull(rt.Conn.Reader, b); err != nil {
+			return nil, err
+		}
+		f.LinkTarget = string(b)
+	}
+
 	return f, nil
 }
 
 // rsync/flist.c:recv_file_list
-func (rt *recvTransfer) receiveFileList() ([]*utils.ReceiverFile, error) {
-	var lastFileEntry *utils.ReceiverFile
+func (rt *Transfer) ReceiveFileList() ([]*utils.ReceiverFile, error) {
+	lastFileEntry := new(utils.ReceiverFile)
 	var fileList []*utils.ReceiverFile
 	for {
-		b, err := rt.conn.ReadByte()
+		b, err := rt.Conn.ReadByte()
 		if err != nil {
 			return nil, err
 		}
-
 		if b == 0 {
 			break
 		}
 		flags := uint16(b)
+		// log.Printf("flags: %x", flags)
+		// TODO(protocol >= 28): extended flags
 
 		f, err := rt.receiveFileEntry(flags, lastFileEntry)
 		if err != nil {
 			return nil, err
 		}
-
 		lastFileEntry = f
+		// TODO: include depth in output?
+		log.Printf("[Receiver] i=%d ? %s mode=%o len=%d uid=%d gid=%d flags=?",
+			len(fileList),
+			f.Name,
+			f.Mode,
+			f.Length,
+			f.Uid,
+			f.Gid)
 		fileList = append(fileList, f)
 	}
+
+	utils.SortFileList(fileList)
+
+	if rt.Opts.PreserveUid || rt.Opts.PreserveGid {
+		// receive the uid/gid list
+		users, groups, err := rt.RecvIdList()
+		if err != nil {
+			return nil, err
+		}
+		_ = users
+		_ = groups
+	}
+
+	// read the i/o error flag
+	ioErrors, err := rt.Conn.ReadInt32()
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("ioErrors: %v", ioErrors)
+	rt.IOErrors = ioErrors
+
 	return fileList, nil
 }

@@ -1,21 +1,23 @@
 package rsyncsender
 
 import (
-	"bytes"
 	"io"
+	"os"
+
+	"log"
 )
 
 // rsync.h:map_struct
 type mapStruct struct {
-	fileSize      int64         // file size (from stat)
-	pOffset       int64         // window start
-	pFdOffset     int64         // offset of cursor in fd ala lseek
-	window        []byte        // window pointer
-	pSize         int64         // largest window we allocated
-	pLen          int64         // latest (rounded) window size
-	defWindowSize int64         // default window size
-	f             *bytes.Reader // file descriptor
-	err           error         // first read error
+	fileSize      int64    // file size (from stat)
+	pOffset       int64    // window start
+	pFdOffset     int64    // offset of cursor in fd ala lseek
+	window        []byte   // window pointer
+	pSize         int64    // largest window we allocated
+	pLen          int64    // latest (rounded) window size
+	defWindowSize int64    // default window size
+	f             *os.File // file descriptor
+	err           error    // first read error
 }
 
 const alignBoundary = 1024
@@ -28,7 +30,7 @@ func alignedOvershoot(off int64) int64 {
 	return off & (alignBoundary - 1)
 }
 
-func mapFile(f *bytes.Reader, len int64, readSize int32, blkSize int32) *mapStruct {
+func mapFile(f *os.File, len int64, readSize int32, blkSize int32) *mapStruct {
 	if blkSize > 0 && readSize%blkSize != 0 {
 		readSize += blkSize - (readSize % blkSize)
 	}
@@ -40,12 +42,18 @@ func mapFile(f *bytes.Reader, len int64, readSize int32, blkSize int32) *mapStru
 }
 
 func (ms *mapStruct) ptr(offset int64, l int32) []byte {
+	//log.Printf("ptr(offset=%d, l=%d)", offset, l)
 	len := int64(l)
-	if len == 0 || len < 0 {
+	if len == 0 {
 		return nil
+	}
+	if len < 0 {
+		log.Printf("BUG: invalid len %d", len)
+		os.Exit(1)
 	}
 
 	if offset >= ms.pOffset && offset+int64(len) <= ms.pOffset+int64(ms.pLen) {
+		//log.Printf("-> already available")
 		// region already available
 		off := offset - ms.pOffset
 		return ms.window[off : off+int64(len)]
@@ -70,6 +78,7 @@ func (ms *mapStruct) ptr(offset int64, l int32) []byte {
 	readSize := windowSize
 	readOffset := int64(0)
 
+	//log.Printf("windowSize: %d, ms=%+v", windowSize, ms)
 	if windowStart >= ms.pOffset && windowStart < ms.pOffset+ms.pLen &&
 		windowStart+windowSize >= ms.pOffset+ms.pLen {
 		readStart = ms.pOffset + ms.pLen
@@ -79,20 +88,26 @@ func (ms *mapStruct) ptr(offset int64, l int32) []byte {
 		copy(ms.window[:], ms.window[off:off+readOffset])
 	}
 	if readSize <= 0 {
-		return nil
+		log.Printf("BUG: invalid readSize=%d", readSize)
+		os.Exit(1)
 	}
 	if ms.pFdOffset != readStart {
 		if _, err := ms.f.Seek(readStart, io.SeekStart); err != nil {
-			return nil
+			log.Printf("seek error: %v", err)
+			os.Exit(1)
 		}
 		ms.pFdOffset = readStart
 	}
 	ms.pOffset = windowStart
 	ms.pLen = windowSize
+	//log.Printf("-> reading %d bytes from %d into buffer at offset=%d", readSize, readStart, readOffset)
 	for readSize > 0 {
 		n, err := ms.f.Read(ms.window[readOffset : readOffset+readSize])
 		if err != nil {
 			ms.err = err
+			// TODO: zero the buffer, file has changed mid-transfer
+			log.Printf("file has changed mid-transfer")
+			os.Exit(1)
 			break
 		}
 		ms.pFdOffset += int64(n)

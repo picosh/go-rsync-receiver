@@ -1,9 +1,9 @@
 package rsyncsender
 
 import (
-	"bytes"
 	"encoding/binary"
 	"io"
+	"log"
 	"os"
 	"sort"
 
@@ -15,27 +15,33 @@ import (
 )
 
 // rsync/sender.c:send_files()
-func (st *sendTransfer) sendFiles(fileList *fileList) error {
+func (st *Transfer) SendFiles(fileList *fileList) error {
 	phase := 0
 	for {
 		// receive data about receiver’s copy of the file list contents (not
 		// ordered)
 		// see (*rsync.Receiver).Generator()
-		fileIndex, err := st.conn.ReadInt32()
+		fileIndex, err := st.Conn.ReadInt32()
 		if err != nil {
 			return err
 		}
-
 		if fileIndex == -1 {
 			if phase == 0 {
 				phase++
 				// acknowledge phase change by sending -1
-				if err := st.conn.WriteInt32(-1); err != nil {
+				if err := st.Conn.WriteInt32(-1); err != nil {
 					return err
 				}
 				continue
 			}
 			break
+		}
+
+		if st.Opts.DryRun() {
+			if err := st.Conn.WriteInt32(fileIndex); err != nil {
+				return err
+			}
+			continue
 		}
 
 		head, err := st.receiveSums()
@@ -67,7 +73,7 @@ func (st *sendTransfer) sendFiles(fileList *fileList) error {
 			// value and gives an index into the sorted signature table which
 			// points to the first entry in the table which has a matching
 			// hash.”
-			for idx := range head.Sums {
+			for idx := len(head.Sums) - 1; idx >= 0; idx-- {
 				tagTable[targets[idx].tag] = idx
 			}
 		}
@@ -75,15 +81,20 @@ func (st *sendTransfer) sendFiles(fileList *fileList) error {
 		st.lastMatch = 0
 		if len(head.Sums) == 0 {
 			// fast path: send the whole file
-			err = st.sendFile(fileIndex, fileList.files[fileIndex])
+			err = st.sendFile(fileIndex, fileList.Files[fileIndex])
 		} else {
-			err = st.hashSearch(targets, tagTable, head, fileIndex, fileList.files[fileIndex])
+			err = st.hashSearch(targets, tagTable, head, fileIndex, fileList.Files[fileIndex])
 		}
 		if err != nil {
 			if _, ok := err.(*os.PathError); ok {
 				// OpenFile() failed. Log the error (server side only) and
 				// proceed. Only starting with protocol 30, an I/O error flag is
 				// sent after the file transfer phase.
+				if os.IsNotExist(err) {
+					log.Printf("file has vanished: %s", fileList.Files[fileIndex].Path)
+				} else {
+					log.Printf("sendFiles: %v", err)
+				}
 				continue
 			} else {
 				return err
@@ -92,7 +103,7 @@ func (st *sendTransfer) sendFiles(fileList *fileList) error {
 	}
 
 	// phase done
-	if err := st.conn.WriteInt32(-1); err != nil {
+	if err := st.Conn.WriteInt32(-1); err != nil {
 		return err
 	}
 
@@ -100,15 +111,15 @@ func (st *sendTransfer) sendFiles(fileList *fileList) error {
 }
 
 // rsync/sender.c:receive_sums()
-func (st *sendTransfer) receiveSums() (rsync.SumHead, error) {
+func (st *Transfer) receiveSums() (rsync.SumHead, error) {
 	var head rsync.SumHead
-	if err := head.ReadFrom(st.conn); err != nil {
+	if err := head.ReadFrom(st.Conn); err != nil {
 		return head, err
 	}
 	var offset int64
 	head.Sums = make([]rsync.SumBuf, int(head.ChecksumCount))
 	for i := int32(0); i < head.ChecksumCount; i++ {
-		shortChecksum, err := st.conn.ReadInt32()
+		shortChecksum, err := st.Conn.ReadInt32()
 		if err != nil {
 			return head, err
 		}
@@ -123,111 +134,83 @@ func (st *sendTransfer) receiveSums() (rsync.SumHead, error) {
 			sb.Len = int64(head.BlockLength)
 		}
 		offset += sb.Len
-		n, err := io.ReadFull(st.conn.Reader, sb.Sum2[:head.ChecksumLength])
+		n, err := io.ReadFull(st.Conn.Reader, sb.Sum2[:head.ChecksumLength])
 		if err != nil {
 			return head, err
 		}
 		_ = n
-
+		// log.Printf("chunk[%d] len=%d offset=%.0f sum1=%08x, sum2=%x",
 		// 	i, sb.len, float64(sb.offset), sb.sum1, sb.sum2[:n])
 		head.Sums[i] = sb
 	}
 	return head, nil
 }
 
-func (st *sendTransfer) sendFile(fileIndex int32, fl *utils.SenderFile) error {
+func (st *Transfer) sendFile(fileIndex int32, fl utils.SenderFile) error {
 	// rsync/rsync.h defines chunkSize as 32 * 1024, but increasing it to 256K
 	// increases throughput with “tridge” rsync as client by 50 Mbit/s.
-	const chunkSize = 32 * 1024
+	const chunkSize = 256 * 1024
 
-	fi, f, err := st.filesystem.Read(fl)
-	defer f.Close()
+	fi, r, err := st.files.Read(&fl)
 	if err != nil {
 		return err
 	}
+	defer r.Close()
 
-	off := 0
-	b := make([]byte, 0, 512)
-
-	for {
-		if len(b) == cap(b) {
-			b = append(b, 0)[:len(b)]
-		}
-
-		n, err := f.ReadAt(b[len(b):cap(b)], int64(off))
-		off += n
-
-		b = b[:len(b)+n]
-
-		if err != nil {
-			if err == io.EOF {
-				err = nil
-			}
-
-			if err != nil {
-				return err
-			}
-			break
-		}
-	}
-
-	fb := bytes.NewReader(b)
-
-	if err := st.conn.WriteInt32(fileIndex); err != nil {
+	if err := st.Conn.WriteInt32(fileIndex); err != nil {
 		return err
 	}
 
 	sh := rsynccommon.SumSizesSqroot(fi.Size())
-	if err := sh.WriteTo(st.conn); err != nil {
+	// log.Printf("sh = %+v", sh)
+	if err := sh.WriteTo(st.Conn); err != nil {
 		return err
 	}
 
 	h := md4.New()
-	binary.Write(h, binary.LittleEndian, st.seed)
-
-	// Calculate the md4 hash in a goroutine.
-	//
-	// This allows an rsync connection to benefit from more than 1 core!
-	//
-	// We calculate the hash by opening the same file again and reading
-	// independently. This keeps the hot loop below focused on shoveling data
-	// into the network socket as quickly as possible.
-	func() error {
-		var buf [chunkSize]byte
-		if _, err := io.CopyBuffer(h, fb, buf[:]); err != nil {
-			return err
-		}
-		return nil
-	}()
-
-	fb.Reset(b)
+	binary.Write(h, binary.LittleEndian, st.Seed)
 
 	buf := make([]byte, chunkSize)
 	for {
-		n, err := fb.Read(buf)
+		shouldBreak := false
+		n, err := r.Read(buf)
 		if err != nil {
 			if err == io.EOF {
-				break
+				shouldBreak = true
+			} else {
+				return err
 			}
-			return err
 		}
 		chunk := buf[:n]
-		// chunk size (“rawtok” variable in openrsync)
-		if err := st.conn.WriteInt32(int32(len(chunk))); err != nil {
+
+		if len(chunk) == 0 {
+			break
+		}
+
+		_, err = h.Write(chunk)
+		if err != nil {
 			return err
 		}
-		if _, err := st.conn.Writer.Write(chunk); err != nil {
+		// chunk size (“rawtok” variable in openrsync)
+		if err := st.Conn.WriteInt32(int32(len(chunk))); err != nil {
 			return err
+		}
+		if _, err := st.Conn.Writer.Write(chunk); err != nil {
+			return err
+		}
+
+		if shouldBreak {
+			break
 		}
 	}
 	// transfer finished:
-	if err := st.conn.WriteInt32(0); err != nil {
+	if err := st.Conn.WriteInt32(0); err != nil {
 		return err
 	}
 
 	sum := h.Sum(nil)
-
-	if _, err := st.conn.Writer.Write(sum); err != nil {
+	// log.Printf("sum: %x (len = %d)", sum, len(sum))
+	if _, err := st.Conn.Writer.Write(sum); err != nil {
 		return err
 	}
 	return nil

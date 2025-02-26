@@ -5,65 +5,49 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash"
-	"io"
+	"log"
+	"os"
 
 	"github.com/mmcloughlin/md4"
+	"github.com/picosh/go-rsync-receiver/nofollow"
 	"github.com/picosh/go-rsync-receiver/rsync"
 	"github.com/picosh/go-rsync-receiver/rsyncchecksum"
 	"github.com/picosh/go-rsync-receiver/utils"
 )
 
+type target struct {
+	index int32
+	tag   uint16
+}
+
 // rsync/match.c:hash_search
-func (st *sendTransfer) hashSearch(targets []target, tagTable map[uint16]int, head rsync.SumHead, fileIndex int32, fl *utils.SenderFile) error {
-	fi, f, err := st.filesystem.Read(fl)
+func (st *Transfer) hashSearch(targets []target, tagTable map[uint16]int, head rsync.SumHead, fileIndex int32, fl utils.SenderFile) error {
+	log.Printf("hashSearch(path=%s, len(sums)=%d)", fl.Path, len(head.Sums))
+	f, err := os.OpenFile(fl.Path, os.O_RDONLY|nofollow.Maybe, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
 	if err != nil {
 		return err
 	}
 
-	off := 0
-	b := make([]byte, 0, 512)
+	readSize := max(3*head.BlockLength, 256*1024)
+	ms := mapFile(f, fi.Size(), readSize, head.BlockLength)
 
-	for {
-		if len(b) == cap(b) {
-			b = append(b, 0)[:len(b)]
-		}
-
-		n, err := f.ReadAt(b[len(b):cap(b)], int64(off))
-		off += n
-
-		b = b[:len(b)+n]
-
-		if err != nil {
-			if err == io.EOF {
-				err = nil
-			}
-
-			if err != nil {
-				return err
-			}
-			break
-		}
-	}
-
-	fb := bytes.NewReader(b)
-
-	readSize := 3 * head.BlockLength
-	if readSize < 32*1024 {
-		readSize = 32 * 1024
-	}
-	ms := mapFile(fb, fi.Size(), readSize, head.BlockLength)
-
-	if err := st.conn.WriteInt32(fileIndex); err != nil {
+	if err := st.Conn.WriteInt32(fileIndex); err != nil {
 		return err
 	}
 
-	if err := head.WriteTo(st.conn); err != nil {
+	if err := head.WriteTo(st.Conn); err != nil {
 		return err
 	}
 
 	// sum_init()
 	h := md4.New()
-	binary.Write(h, binary.LittleEndian, st.seed)
+	binary.Write(h, binary.LittleEndian, st.Seed)
 
 	// The following quotes are citations from
 	// https://www.samba.org/~tridge/phd_thesis.pdf, section 3.2.6 The
@@ -81,6 +65,7 @@ func (st *sendTransfer) hashSearch(targets []target, tagTable map[uint16]int, he
 	var s1, s2 uint32
 	var offset int64
 	end := fi.Size() + 1 - head.Sums[len(head.Sums)-1].Len
+	log.Printf("last block len=%d, end=%d", head.Sums[len(head.Sums)-1].Len, end)
 
 	readChunk := func() error {
 		k = int(head.BlockLength)
@@ -128,13 +113,16 @@ Outer:
 					continue
 				}
 
+				// log.Printf("potential match at %d target=%d %d sum=%08x", offset, j, i, sum)
+
 				if !doneCsum2 {
 					buf := ms.ptr(offset, int32(l))
-					sum2 = rsyncchecksum.Checksum2(st.seed, buf[:])
+					sum2 = rsyncchecksum.Checksum2(st.Seed, buf[:])
 					doneCsum2 = true
 				}
 
 				if local, remote := sum2[:head.ChecksumLength], head.Sums[i].Sum2[:head.ChecksumLength]; !bytes.Equal(local, remote) {
+					log.Printf("false alarm: local %x, remote %x", local, remote)
 					//falseAlarms++
 					continue
 				}
@@ -173,10 +161,7 @@ Outer:
 
 		// Update the rolling checksum by removing the oldest byte (update[0])
 		// and adding the newest byte (update[k]).
-		backup := offset - st.lastMatch
-		if backup < 0 {
-			backup = 0
-		}
+		backup := max(offset-st.lastMatch, 0)
 
 		more := offset+int64(k) < fi.Size()
 		mmore := int64(0)
@@ -218,8 +203,8 @@ Outer:
 
 	{
 		sum := h.Sum(nil)
-
-		if _, err := st.conn.Writer.Write(sum); err != nil {
+		log.Printf("sum: %x (len = %d)", sum, len(sum))
+		if _, err := st.Conn.Writer.Write(sum); err != nil {
 			return err
 		}
 	}
@@ -229,14 +214,16 @@ Outer:
 }
 
 // rsync/match.c:matched
-func (st *sendTransfer) matched(h hash.Hash, ms *mapStruct, head rsync.SumHead, offset int64, i int32) error {
+func (st *Transfer) matched(h hash.Hash, ms *mapStruct, head rsync.SumHead, offset int64, i int32) error {
 	n := offset - st.lastMatch
 
 	transmitAccumulated := i < 0
 
 	// if !transmitAccumulated {
+	// 	log.Printf("match at offset=%d last_match=%d i=%d len=%d n=%d",
 	// 		offset, st.lastMatch, i, head.Sums[i].Len, n)
 	// } else {
+	// 	log.Printf("transmit accumulated at offset=%d", offset)
 	// }
 
 	/* FIXME: this is not used
@@ -257,10 +244,7 @@ func (st *sendTransfer) matched(h hash.Hash, ms *mapStruct, head rsync.SumHead, 
 	}
 
 	for j := int64(0); j < n; j += chunkSize {
-		n1 := int64(chunkSize)
-		if n-j < n1 {
-			n1 = n - j
-		}
+		n1 := min(int64(chunkSize), n-j)
 		chunk := ms.ptr(st.lastMatch+j, int32(n1))
 		h.Write(chunk)
 	}

@@ -41,7 +41,7 @@ type MultiplexReader struct {
 // rsync.h defines IO_BUFFER_SIZE as 32 * 1024, but gokr-rsyncd increases it to
 // 256K. Since we use this as the maximum message size, too, we need to at least
 // match it.
-const ioBufferSize = 32 * 1024
+const ioBufferSize = 256 * 1024
 const maxMessageSize = ioBufferSize
 
 func (w *MultiplexReader) ReadMsg() (tag uint8, p []byte, err error) {
@@ -92,8 +92,8 @@ type Buffer struct {
 	buf bytes.Buffer
 }
 
-func (b *Buffer) WriteByte(data byte) error {
-	return binary.Write(&b.buf, binary.LittleEndian, data)
+func (b *Buffer) WriteByte(data byte) {
+	binary.Write(&b.buf, binary.LittleEndian, data)
 }
 
 func (b *Buffer) WriteInt32(data int32) {
@@ -183,4 +183,32 @@ func (c *Conn) ReadInt64() (int64, error) {
 		return 0, err
 	}
 	return data, nil
+}
+
+type CountingReader struct {
+	R         io.Reader
+	BytesRead int64
+}
+
+func (r *CountingReader) Read(p []byte) (n int, err error) {
+	n, err = r.R.Read(p)
+	r.BytesRead += int64(n)
+	return n, err
+}
+
+type CountingWriter struct {
+	W            io.Writer
+	BytesWritten int64
+}
+
+func (w *CountingWriter) Write(p []byte) (n int, err error) {
+	n, err = w.W.Write(p)
+	w.BytesWritten += int64(n)
+	return n, err
+}
+
+func CounterPair(r io.Reader, w io.Writer) (*CountingReader, *CountingWriter) {
+	crd := &CountingReader{R: r}
+	cwr := &CountingWriter{W: w}
+	return crd, cwr
 }
