@@ -12,7 +12,6 @@ import (
 	"github.com/picosh/go-rsync-receiver/rsyncchecksum"
 	"github.com/picosh/go-rsync-receiver/rsynccommon"
 	"github.com/picosh/go-rsync-receiver/utils"
-	"golang.org/x/sync/errgroup"
 )
 
 // rsync/sender.c:send_files()
@@ -158,6 +157,14 @@ func (st *Transfer) sendFile(fileIndex int32, fl utils.SenderFile) error {
 	}
 	defer r.Close()
 
+	var writer io.Writer = st.Conn.Writer
+
+	// if st.Opts.Compress() {
+	// 	zlibWriter := zlib.NewWriter(st.Conn.Writer)
+	// 	defer zlibWriter.Close()
+	// 	writer = zlibWriter
+	// }
+
 	if err := st.Conn.WriteInt32(fileIndex); err != nil {
 		return err
 	}
@@ -171,43 +178,32 @@ func (st *Transfer) sendFile(fileIndex int32, fl utils.SenderFile) error {
 	h := md4.New()
 	binary.Write(h, binary.LittleEndian, st.Seed)
 
-	// Calculate the md4 hash in a goroutine.
-	//
-	// This allows an rsync connection to benefit from more than 1 core!
-	//
-	// We calculate the hash by opening the same file again and reading
-	// independently. This keeps the hot loop below focused on shoveling data
-	// into the network socket as quickly as possible.
-	var eg errgroup.Group
-	eg.Go(func() error {
-		_, r, err := st.files.Read(&fl)
-		if err != nil {
-			return err
-		}
-		defer r.Close()
-		var buf [chunkSize]byte
-		if _, err := io.CopyBuffer(h, r, buf[:]); err != nil {
-			return err
-		}
-		return nil
-	})
-
 	buf := make([]byte, chunkSize)
 	for {
+		shouldBreak := false
 		n, err := r.Read(buf)
 		if err != nil {
 			if err == io.EOF {
-				break
+				shouldBreak = true
+			} else {
+				return err
 			}
-			return err
 		}
 		chunk := buf[:n]
+		_, err = h.Write(chunk)
+		if err != nil {
+			return err
+		}
 		// chunk size (“rawtok” variable in openrsync)
 		if err := st.Conn.WriteInt32(int32(len(chunk))); err != nil {
 			return err
 		}
-		if _, err := st.Conn.Writer.Write(chunk); err != nil {
+		if _, err := writer.Write(chunk); err != nil {
 			return err
+		}
+
+		if shouldBreak {
+			break
 		}
 	}
 	// transfer finished:
@@ -215,10 +211,6 @@ func (st *Transfer) sendFile(fileIndex int32, fl utils.SenderFile) error {
 		return err
 	}
 
-	// whole file long checksum (16 bytes)
-	if err := eg.Wait(); err != nil {
-		return err
-	}
 	sum := h.Sum(nil)
 	// log.Printf("sum: %x (len = %d)", sum, len(sum))
 	if _, err := st.Conn.Writer.Write(sum); err != nil {

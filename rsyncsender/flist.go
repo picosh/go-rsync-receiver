@@ -209,18 +209,23 @@ func (st *Transfer) SendFileList(opts *rsyncopts.Options, paths []string, excl *
 	fec.WriteByte(endOfFileList)
 
 	const endOfSet = 0
-	for uid, name := range uidMap {
-		fec.WriteInt32(uid)
-		fec.WriteByte(byte(len(name)))
-		fec.WriteString(name)
+	if opts.PreserveUid() {
+		for uid, name := range uidMap {
+			fec.WriteInt32(uid)
+			fec.WriteByte(byte(len(name)))
+			fec.WriteString(name)
+		}
+		fec.WriteInt32(endOfSet)
 	}
-	fec.WriteInt32(endOfSet)
-	for gid, name := range gidMap {
-		fec.WriteInt32(gid)
-		fec.WriteByte(byte(len(name)))
-		fec.WriteString(name)
+
+	if opts.PreserveGid() {
+		for gid, name := range gidMap {
+			fec.WriteInt32(gid)
+			fec.WriteByte(byte(len(name)))
+			fec.WriteString(name)
+		}
+		fec.WriteInt32(endOfSet)
 	}
-	fec.WriteInt32(endOfSet)
 
 	const ioErrors = 0
 	fec.WriteInt32(ioErrors)

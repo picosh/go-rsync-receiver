@@ -387,6 +387,8 @@ func (o *Options) Daemon() bool               { return o.am_daemon != 0 }
 func (o *Options) ConnectTimeoutSeconds() int { return o.connect_timeout }
 func (o *Options) AlwaysChecksum() bool       { return o.always_checksum != 0 }
 func (o *Options) Compress() bool             { return o.do_compression != 0 }
+func (o *Options) CompressChoice() string     { return o.compress_choice }
+func (o *Options) CompressLevel() int         { return o.do_compression_level }
 
 func (o *Options) daemonTable() []poptOption {
 	return []poptOption{
