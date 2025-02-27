@@ -3,7 +3,6 @@ package rsyncsender
 import (
 	"encoding/binary"
 	"io"
-	"log"
 	"os"
 	"sort"
 
@@ -91,9 +90,9 @@ func (st *Transfer) SendFiles(fileList *fileList) error {
 				// proceed. Only starting with protocol 30, an I/O error flag is
 				// sent after the file transfer phase.
 				if os.IsNotExist(err) {
-					log.Printf("file has vanished: %s", fileList.Files[fileIndex].Path)
+					st.Logger.Debug("file has vanished", "file", fileList.Files[fileIndex])
 				} else {
-					log.Printf("sendFiles: %v", err)
+					st.Logger.Error("sendFiles", "err", err)
 				}
 				continue
 			} else {
@@ -151,7 +150,7 @@ func (st *Transfer) sendFile(fileIndex int32, fl utils.SenderFile) error {
 	// increases throughput with “tridge” rsync as client by 50 Mbit/s.
 	const chunkSize = 256 * 1024
 
-	fi, r, err := st.files.Read(&fl)
+	fi, r, err := st.Files.Read(&fl)
 	if err != nil {
 		return err
 	}

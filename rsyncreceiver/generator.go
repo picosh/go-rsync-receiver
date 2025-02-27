@@ -6,8 +6,6 @@ import (
 	"os"
 	"time"
 
-	"log"
-
 	"github.com/picosh/go-rsync-receiver/rsync"
 	"github.com/picosh/go-rsync-receiver/rsyncchecksum"
 	"github.com/picosh/go-rsync-receiver/rsynccommon"
@@ -20,25 +18,28 @@ func (rt *Transfer) GenerateFiles(fileList []*utils.ReceiverFile) error {
 	for idx, f := range fileList {
 		// TODO: use a copy of f with .Mode |= S_IWUSR for directories, so
 		// that we can create files within all directories.
+		if rt.Files != nil && rt.Files.Skip(f) {
+			continue
+		}
 
 		if err := rt.recvGenerator(idx, f); err != nil {
 			return err
 		}
 	}
 	phase++
-	log.Printf("generateFiles phase=%d", phase)
+	rt.Logger.Debug("generateFiles", "phase", phase)
 	if err := rt.Conn.WriteInt32(-1); err != nil {
 		return err
 	}
 
 	// TODO: re-do any files that failed
 	phase++
-	log.Printf("generateFiles phase=%d", phase)
+	rt.Logger.Debug("generateFiles", "phase", phase)
 	if err := rt.Conn.WriteInt32(-1); err != nil {
 		return err
 	}
 
-	log.Printf("generateFiles finished")
+	rt.Logger.Debug("generateFiles finished")
 	return nil
 }
 
@@ -60,7 +61,6 @@ func (rt *Transfer) skipFile(f *utils.ReceiverFile, st os.FileInfo) (bool, error
 func modTimeEqual(a, b time.Time) bool {
 	a = a.Truncate(time.Second)
 	b = b.Truncate(time.Second)
-	log.Printf("comparing mtime: %v vs. %v", a, b)
 	return a.Equal(b)
 }
 
@@ -74,9 +74,9 @@ func (rt *Transfer) recvGenerator(idx int, f *utils.ReceiverFile) error {
 			f.Name)
 		return nil
 	}
-	log.Printf("recv_generator(f=%+v)", f)
+	rt.Logger.Debug("recv_generator", "file", f)
 
-	st, in, err := rt.files.Read(&utils.SenderFile{Path: f.Name})
+	st, in, err := rt.Files.Read(&utils.SenderFile{Path: f.Name})
 
 	if !f.FileMode().IsRegular() {
 		// None of the Preserve* options is enabled, so just skip over
@@ -85,7 +85,7 @@ func (rt *Transfer) recvGenerator(idx int, f *utils.ReceiverFile) error {
 	}
 
 	requestFullFile := func() error {
-		log.Printf("requesting: %s", f.Name)
+		rt.Logger.Debug("requesting", "file", f)
 		if err := rt.Conn.WriteInt32(int32(idx)); err != nil {
 			return err
 		}
@@ -100,7 +100,7 @@ func (rt *Transfer) recvGenerator(idx int, f *utils.ReceiverFile) error {
 	}
 
 	if err != nil {
-		log.Printf("failed to open %+v (%s), continuing: %v", st, f.Name, err)
+		rt.Logger.Error("failed to open file", "st", st, "file", f, "err", err)
 		return requestFullFile()
 	}
 
@@ -110,7 +110,7 @@ func (rt *Transfer) recvGenerator(idx int, f *utils.ReceiverFile) error {
 	}
 
 	if skip {
-		log.Printf("skipping %+v", f)
+		rt.Logger.Debug("skipping", "file", f)
 		return nil
 	}
 
@@ -122,7 +122,7 @@ func (rt *Transfer) recvGenerator(idx int, f *utils.ReceiverFile) error {
 		return nil
 	}
 
-	log.Printf("sending sums for: %s", f.Name)
+	rt.Logger.Debug("sending sums", "file", f, "st", st)
 	if err := rt.Conn.WriteInt32(int32(idx)); err != nil {
 		return err
 	}

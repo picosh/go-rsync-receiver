@@ -2,9 +2,8 @@ package rsyncsender
 
 import (
 	"io"
+	"log/slog"
 	"os"
-
-	"log"
 )
 
 // rsync.h:map_struct
@@ -48,8 +47,8 @@ func (ms *mapStruct) ptr(offset int64, l int32) []byte {
 		return nil
 	}
 	if len < 0 {
-		log.Printf("BUG: invalid len %d", len)
-		os.Exit(1)
+		slog.Debug("BUG: invalid len", "len", len)
+		return nil
 	}
 
 	if offset >= ms.pOffset && offset+int64(len) <= ms.pOffset+int64(ms.pLen) {
@@ -88,13 +87,13 @@ func (ms *mapStruct) ptr(offset int64, l int32) []byte {
 		copy(ms.window[:], ms.window[off:off+readOffset])
 	}
 	if readSize <= 0 {
-		log.Printf("BUG: invalid readSize=%d", readSize)
-		os.Exit(1)
+		slog.Debug("BUG: invalid readSize", "readSize", readSize)
+		return nil
 	}
 	if ms.pFdOffset != readStart {
 		if _, err := ms.f.Seek(readStart, io.SeekStart); err != nil {
-			log.Printf("seek error: %v", err)
-			os.Exit(1)
+			slog.Error("seek error", "err", err)
+			return nil
 		}
 		ms.pFdOffset = readStart
 	}
@@ -106,9 +105,8 @@ func (ms *mapStruct) ptr(offset int64, l int32) []byte {
 		if err != nil {
 			ms.err = err
 			// TODO: zero the buffer, file has changed mid-transfer
-			log.Printf("file has changed mid-transfer")
-			os.Exit(1)
-			break
+			slog.Debug("file has changed mid-transfer")
+			return nil
 		}
 		ms.pFdOffset += int64(n)
 		readOffset += int64(n)

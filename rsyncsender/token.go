@@ -1,11 +1,9 @@
 package rsyncsender
 
-import "log"
-
 // rsync/token.c:simple_send_token
 func (st *Transfer) simpleSendToken(ms *mapStruct, token int32, offset int64, n int64) error {
 	if n > 0 {
-		log.Printf("sending unmatched chunks offset=%d, n=%d", offset, n)
+		st.Logger.Debug("sending unmatched chunks", "offset", offset, "n", n)
 		l := int64(0)
 		for l < n {
 			n1 := min(int64(chunkSize), n-l)

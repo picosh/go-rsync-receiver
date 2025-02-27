@@ -1,7 +1,6 @@
 package rsyncsender
 
 import (
-	"log"
 	"os"
 	"os/user"
 	"strconv"
@@ -41,10 +40,10 @@ func (st *Transfer) SendFileList(opts *rsyncopts.Options, paths []string, excl *
 	// TODO: handle info == nil case (permission denied?): should set an i/o
 	// error flag, but traversal should continue
 
-	log.Printf("sendFileList()")
+	st.Logger.Debug("sendFileList()")
 	// TODO: handle |root| referring to an individual file, symlink or special (skip)
 	for _, requested := range paths {
-		files, err := st.files.List(requested)
+		files, err := st.Files.List(requested)
 		if err != nil {
 			return nil, err
 		}
@@ -138,7 +137,7 @@ func (st *Transfer) SendFileList(opts *rsyncopts.Options, paths []string, excl *
 						u, err := user.LookupId(strconv.Itoa(int(uid)))
 						if err != nil {
 							lookupOnce.Do(func() {
-								log.Printf("lookup(%d) = %v", uid, err)
+								st.Logger.Error("lookup", "uid", uid, "err", err)
 							})
 						} else {
 							uidMap[uid] = u.Username
@@ -156,7 +155,7 @@ func (st *Transfer) SendFileList(opts *rsyncopts.Options, paths []string, excl *
 						g, err := user.LookupGroupId(strconv.Itoa(int(gid)))
 						if err != nil {
 							lookupGroupOnce.Do(func() {
-								log.Printf("lookupgroup(%d) = %v", gid, err)
+								st.Logger.Error("lookupgroup", "gid", gid, "err", err)
 							})
 						} else {
 							gidMap[gid] = g.Name

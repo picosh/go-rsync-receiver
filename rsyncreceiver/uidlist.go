@@ -2,7 +2,6 @@ package rsyncreceiver
 
 import (
 	"io"
-	"log"
 )
 
 type mapping struct {
@@ -48,7 +47,7 @@ func (rt *Transfer) RecvIdList() (users map[int32]mapping, groups map[int32]mapp
 			return nil, nil, err
 		}
 		for remoteUid, mapping := range users {
-			log.Printf("remote uid %d(%s) maps to local uid %d", remoteUid, mapping.Name, mapping.LocalId)
+			rt.Logger.Debug("remote uid maps to local uid", "remoteUid", remoteUid, "name", mapping.Name, "localUid", mapping.LocalId)
 		}
 	}
 
@@ -62,7 +61,7 @@ func (rt *Transfer) RecvIdList() (users map[int32]mapping, groups map[int32]mapp
 			return nil, nil, err
 		}
 		for remoteGid, mapping := range groups {
-			log.Printf("remote gid %d(%s) maps to local gid %d", remoteGid, mapping.Name, mapping.LocalId)
+			rt.Logger.Debug("remote gid maps to local gid", "remoteGid", remoteGid, "name", mapping.Name, "localGid", mapping.LocalId)
 		}
 	}
 

@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 )
 
 const (
@@ -76,7 +76,7 @@ func (w *MultiplexReader) Read(p []byte) (n int, err error) {
 		return 0, fmt.Errorf("%s", payload)
 	}
 	if tag == MsgInfo {
-		log.Printf("info: %s", payload)
+		slog.Debug("info", "payload", payload)
 	}
 	if tag != MsgData {
 		return 0, fmt.Errorf("unexpected tag: got %v, want %v", tag, MsgData)

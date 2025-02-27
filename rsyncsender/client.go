@@ -3,7 +3,7 @@ package rsyncsender
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 
 	"github.com/picosh/go-rsync-receiver/rsync"
 	"github.com/picosh/go-rsync-receiver/rsyncopts"
@@ -11,7 +11,7 @@ import (
 	"github.com/picosh/go-rsync-receiver/utils"
 )
 
-func ClientRun(opts *rsyncopts.Options, conn io.ReadWriter, filesystem utils.FS, paths []string, negotiate bool) error {
+func ClientRun(logger *slog.Logger, opts *rsyncopts.Options, conn io.ReadWriter, filesystem utils.FS, paths []string, negotiate bool) error {
 	var err error
 
 	crd, cwr := rsyncwire.CounterPair(conn, conn)
@@ -28,7 +28,7 @@ func ClientRun(opts *rsyncopts.Options, conn io.ReadWriter, filesystem utils.FS,
 		if err != nil {
 			return err
 		}
-		log.Printf("remote protocol: %d", remoteProtocol)
+		logger.Debug("remote protocol", "remoteProtocol", remoteProtocol)
 		if err := c.WriteInt32(rsync.ProtocolVersion); err != nil {
 			return err
 		}
@@ -53,21 +53,23 @@ func ClientRun(opts *rsyncopts.Options, conn io.ReadWriter, filesystem utils.FS,
 		Opts:  opts,
 		Conn:  c,
 		Seed:  sessionChecksumSeed,
-		files: filesystem,
+		Files: filesystem,
+
+		Logger: logger,
 	}
 	// receive the exclusion list (openrsync’s is always empty)
 	exclusionList, err := RecvFilterList(st.Conn)
 	if err != nil {
 		return err
 	}
-	log.Printf("exclusion list read (entries: %d)", len(exclusionList.Filters))
+	logger.Debug("exclusion list read", "filters", exclusionList.Filters)
 
 	stats, err := st.Do(crd, cwr, paths, exclusionList)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("handleConnSender done. stats: %+v", stats)
+	logger.Debug("handleConnSender done. stats", "stats", stats)
 
 	return err
 }

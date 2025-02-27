@@ -3,8 +3,6 @@ package rsyncreceiver
 import (
 	"context"
 
-	"log"
-
 	"github.com/picosh/go-rsync-receiver/rsyncstats"
 	"github.com/picosh/go-rsync-receiver/rsyncwire"
 	"github.com/picosh/go-rsync-receiver/utils"
@@ -13,11 +11,11 @@ import (
 
 func (rt *Transfer) deleteFiles(fileList []*utils.ReceiverFile) error {
 	if rt.IOErrors > 0 {
-		log.Printf("IO error encountered, skipping file deletion")
+		rt.Logger.Debug("IO error encountered, skipping file deletion")
 		return nil
 	}
 
-	return rt.files.Remove(fileList)
+	return rt.Files.Remove(fileList)
 }
 
 // rsync/main.c:do_recv
@@ -55,6 +53,7 @@ func (rt *Transfer) Do(c *rsyncwire.Conn, fileList []*utils.ReceiverFile, noRepo
 	if !noReport {
 		var err error
 		stats, err = report(c)
+		rt.Logger.Debug("report", "stats", stats)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +85,6 @@ func report(c *rsyncwire.Conn) (*rsyncstats.TransferStats, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("server sent stats: read=%d, written=%d, size=%d", read, written, size)
 
 	return &rsyncstats.TransferStats{
 		Read:    read,

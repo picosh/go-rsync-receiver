@@ -10,9 +10,8 @@ package rsyncopts
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -307,15 +306,12 @@ Level:
 			var err error
 			lev, err = strconv.Atoi(s[len(trimmed):])
 			if err != nil {
-				log.Fatal(err) // TODO: plumb error
+				continue
 			}
 		}
 		trimmed = strings.ToLower(trimmed)
 		all := false
 		switch trimmed {
-		case "help":
-			log.Printf("TODO: print --info/--debug help and exit")
-			os.Exit(0)
 		case "none":
 			lev = 0
 		case "all":
@@ -329,9 +325,6 @@ Level:
 					continue Level
 				}
 			}
-		}
-		if !all {
-			log.Fatalf("unknown --info/--debug item: %q", trimmed) // TODO: plumb: error
 		}
 	}
 }
@@ -743,15 +736,10 @@ func ParseArguments(args []string, gokrazyTable bool) (*Context, error) {
 				// Most options are handled by poptGetNextOpt, only special cases
 				// are returned and handled here.
 				switch opt {
-				case 'h':
-					fmt.Println(opts.Help()) // tridge rsync prints help to stdout
-					os.Exit(0)               // exit with code 0 for compatibility with tridge rsync
 				case 'M':
 					return nil, errNotYetImplemented
-
 				case 'v':
 					opts.verbose++
-
 				default:
 					return nil, fmt.Errorf("unhandled special case opt: %v", opt)
 				}
@@ -870,16 +858,12 @@ func ParseArguments(args []string, gokrazyTable bool) (*Context, error) {
 
 		case OPT_DEBUG:
 			// TODO: plumb the debug level that make sense for our implementation
-			log.Printf("TODO: set debug level to %q", pc.poptGetOptArg())
+			slog.Info("TODO: set debug level", "to", pc.poptGetOptArg())
 
 		case OPT_USERMAP,
 			OPT_GROUPMAP,
 			OPT_CHOWN:
 			return nil, errNotYetImplemented
-
-		case OPT_HELP:
-			fmt.Println(opts.Help()) // tridge rsync prints help to stdout
-			os.Exit(0)               // exit with code 0 for compatibility with tridge rsync
 
 		case 'A':
 			return nil, fmt.Errorf("ACLs are not supported by gokrazy/rsync")
@@ -899,16 +883,6 @@ func ParseArguments(args []string, gokrazyTable bool) (*Context, error) {
 
 	// rsync/options.c line 1973 and following set option defaults based on
 	// other options
-
-	if version_opt_cnt > 0 {
-		fmt.Println("")
-		os.Exit(0)
-	}
-
-	if opts.human_readable > 1 && len(args) == 1 /* && !am_server */ {
-		fmt.Println(opts.Help()) // tridge rsync prints help to stdout
-		os.Exit(0)               // exit with code 0 for compatibility with tridge rsync
-	}
 
 	opts.setOutputVerbosity(DEFAULT_PRIORITY)
 

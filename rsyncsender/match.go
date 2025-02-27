@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash"
-	"log"
 	"os"
 
 	"github.com/mmcloughlin/md4"
@@ -22,7 +21,7 @@ type target struct {
 
 // rsync/match.c:hash_search
 func (st *Transfer) hashSearch(targets []target, tagTable map[uint16]int, head rsync.SumHead, fileIndex int32, fl utils.SenderFile) error {
-	log.Printf("hashSearch(path=%s, len(sums)=%d)", fl.Path, len(head.Sums))
+	st.Logger.Debug("hashSearch", "file", fl, "head", head)
 	f, err := os.OpenFile(fl.Path, os.O_RDONLY|nofollow.Maybe, 0)
 	if err != nil {
 		return err
@@ -65,7 +64,7 @@ func (st *Transfer) hashSearch(targets []target, tagTable map[uint16]int, head r
 	var s1, s2 uint32
 	var offset int64
 	end := fi.Size() + 1 - head.Sums[len(head.Sums)-1].Len
-	log.Printf("last block len=%d, end=%d", head.Sums[len(head.Sums)-1].Len, end)
+	st.Logger.Debug("last block", "len", head.Sums[len(head.Sums)-1].Len, "end", end)
 
 	readChunk := func() error {
 		k = int(head.BlockLength)
@@ -122,7 +121,7 @@ Outer:
 				}
 
 				if local, remote := sum2[:head.ChecksumLength], head.Sums[i].Sum2[:head.ChecksumLength]; !bytes.Equal(local, remote) {
-					log.Printf("false alarm: local %x, remote %x", local, remote)
+					st.Logger.Debug("false alarm", "local", local, "remote", remote)
 					//falseAlarms++
 					continue
 				}
@@ -203,7 +202,7 @@ Outer:
 
 	{
 		sum := h.Sum(nil)
-		log.Printf("sum: %x (len = %d)", sum, len(sum))
+		st.Logger.Debug("sum info", "sum", sum, "len", len(sum))
 		if _, err := st.Conn.Writer.Write(sum); err != nil {
 			return err
 		}

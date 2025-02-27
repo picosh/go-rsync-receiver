@@ -2,6 +2,7 @@ package rsyncreceiver
 
 import (
 	"io"
+	"log/slog"
 
 	"github.com/picosh/go-rsync-receiver/rsyncwire"
 	"github.com/picosh/go-rsync-receiver/utils"
@@ -41,7 +42,9 @@ type Transfer struct {
 	Seed     int32
 	IOErrors int32
 
-	files utils.FS
+	Files utils.FS
+
+	Logger *slog.Logger
 }
 
 func (rt *Transfer) listOnly() bool { return rt.Dest == "" }

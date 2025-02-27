@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"log"
-
 	"github.com/picosh/go-rsync-receiver/rsync"
 	"github.com/picosh/go-rsync-receiver/utils"
 )
@@ -164,13 +162,8 @@ func (rt *Transfer) ReceiveFileList() ([]*utils.ReceiverFile, error) {
 		}
 		lastFileEntry = f
 		// TODO: include depth in output?
-		log.Printf("[Receiver] i=%d ? %s mode=%o len=%d uid=%d gid=%d flags=?",
-			len(fileList),
-			f.Name,
-			f.Mode,
-			f.Length,
-			f.Uid,
-			f.Gid)
+		rt.Logger.Debug("recv_file_list", "file", f.Name, "length", f.Length, "mode", f.Mode, "uid", f.Uid, "gid", f.Gid, "flags", flags)
+
 		fileList = append(fileList, f)
 	}
 
@@ -191,7 +184,7 @@ func (rt *Transfer) ReceiveFileList() ([]*utils.ReceiverFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("ioErrors: %v", ioErrors)
+	rt.Logger.Debug("ioErrors", "errs", ioErrors)
 	rt.IOErrors = ioErrors
 
 	return fileList, nil

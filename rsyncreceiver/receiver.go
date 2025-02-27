@@ -7,8 +7,6 @@ import (
 	"io"
 	"sync"
 
-	"log"
-
 	"github.com/mmcloughlin/md4"
 	"github.com/picosh/go-rsync-receiver/rsync"
 	"github.com/picosh/go-rsync-receiver/utils"
@@ -25,18 +23,18 @@ func (rt *Transfer) RecvFiles(fileList []*utils.ReceiverFile) error {
 		if idx == -1 {
 			if phase == 0 {
 				phase++
-				log.Printf("recvFiles phase=%d", phase)
+				rt.Logger.Debug("recvFiles phase", "phase", phase)
 				// TODO: send done message
 				continue
 			}
 			break
 		}
-		log.Printf("receiving file idx=%d: %+v", idx, fileList[idx])
+		rt.Logger.Debug("receiving file", "idx", idx, "file", fileList[idx])
 		if err := rt.recvFile1(fileList[idx]); err != nil {
 			return err
 		}
 	}
-	log.Printf("recvFiles finished")
+	rt.Logger.Debug("recvFiles finished")
 	return nil
 }
 
@@ -48,7 +46,7 @@ func (rt *Transfer) recvFile1(f *utils.ReceiverFile) error {
 
 	localFile, err := rt.openLocalFile(f)
 	if err != nil {
-		log.Printf("opening local file failed, continuing: %v", err)
+		rt.Logger.Error("opening local file failed, continuing", "err", err)
 	} else {
 		defer localFile.Close()
 	}
@@ -59,7 +57,7 @@ func (rt *Transfer) recvFile1(f *utils.ReceiverFile) error {
 }
 
 func (rt *Transfer) openLocalFile(f *utils.ReceiverFile) (utils.ReaderAtCloser, error) {
-	_, r, err := rt.files.Read(&utils.SenderFile{
+	_, r, err := rt.Files.Read(&utils.SenderFile{
 		Path:    f.Name,
 		Regular: true,
 	})
@@ -93,7 +91,7 @@ func (rt *Transfer) receiveData(f *utils.ReceiverFile, localFile utils.ReaderAtC
 			}
 		}()
 
-		_, err := rt.files.Put(f)
+		_, err := rt.Files.Put(f)
 		if err != nil {
 			return
 		}
@@ -151,7 +149,7 @@ func (rt *Transfer) receiveData(f *utils.ReceiverFile, localFile utils.ReaderAtC
 	if !bytes.Equal(localSum, remoteSum) {
 		return fmt.Errorf("file corruption in %s", f.Name)
 	}
-	log.Printf("checksum %x matches!", localSum)
+	rt.Logger.Debug("checksum matches!", "localSum", localSum)
 
 	return nil
 }

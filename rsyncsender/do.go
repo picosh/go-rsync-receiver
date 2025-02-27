@@ -2,7 +2,6 @@ package rsyncsender
 
 import (
 	"fmt"
-	"log"
 	"sort"
 
 	"github.com/picosh/go-rsync-receiver/rsyncstats"
@@ -24,7 +23,7 @@ func (st *Transfer) Do(crd *rsyncwire.CountingReader, cwr *rsyncwire.CountingWri
 		return nil, err
 	}
 
-	log.Printf("file list sent")
+	st.Logger.Debug("file list sent")
 
 	// Sort the file list. The client sorts, so we need to sort, too (in the
 	// same way!), otherwise our indices do not match what the client will
@@ -51,7 +50,7 @@ func (st *Transfer) Do(crd *rsyncwire.CountingReader, cwr *rsyncwire.CountingWri
 		return nil, err
 	}
 
-	log.Printf("reading final int32")
+	st.Logger.Debug("reading final int32")
 
 	finish, err := st.Conn.ReadInt32()
 	if err != nil {
