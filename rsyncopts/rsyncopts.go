@@ -382,6 +382,8 @@ func (o *Options) AlwaysChecksum() bool       { return o.always_checksum != 0 }
 func (o *Options) Compress() bool             { return o.do_compression != 0 }
 func (o *Options) CompressChoice() string     { return o.compress_choice }
 func (o *Options) CompressLevel() int         { return o.do_compression_level }
+func (o *Options) IgnoreTimes() bool          { return o.ignore_times == 1 }
+func (o *Options) SizeOnly() bool             { return o.size_only == 1 }
 
 func (o *Options) daemonTable() []poptOption {
 	return []poptOption{

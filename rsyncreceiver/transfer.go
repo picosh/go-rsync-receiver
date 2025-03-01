@@ -28,6 +28,9 @@ type TransferOpts struct {
 	PreserveSpecials  bool
 	PreserveTimes     bool
 	PreserveHardlinks bool
+	IgnoreTimes       bool
+	SizeOnly          bool
+	AlwaysChecksum    bool
 }
 
 type Transfer struct {

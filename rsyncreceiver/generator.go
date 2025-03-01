@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/picosh/go-rsync-receiver/rsync"
 	"github.com/picosh/go-rsync-receiver/rsyncchecksum"
@@ -18,10 +17,6 @@ func (rt *Transfer) GenerateFiles(fileList []*utils.ReceiverFile) error {
 	for idx, f := range fileList {
 		// TODO: use a copy of f with .Mode |= S_IWUSR for directories, so
 		// that we can create files within all directories.
-		if rt.Files != nil && rt.Files.Skip(f) {
-			continue
-		}
-
 		if err := rt.recvGenerator(idx, f); err != nil {
 			return err
 		}
@@ -45,23 +40,21 @@ func (rt *Transfer) GenerateFiles(fileList []*utils.ReceiverFile) error {
 
 // rsync/generator.c:skip_file
 func (rt *Transfer) skipFile(f *utils.ReceiverFile, st os.FileInfo) (bool, error) {
-	if st.Size() != f.Length {
+	if rt.Opts.AlwaysChecksum {
 		return false, nil
 	}
 
-	// TODO: always checksum flag
+	sizeMatch := st.Size() == f.Length
+	if rt.Opts.SizeOnly {
+		return sizeMatch, nil
+	}
 
-	// TODO: size only
+	timeMatch := true
+	if !rt.Opts.IgnoreTimes {
+		timeMatch = st.ModTime().Equal(f.ModTime)
+	}
 
-	// TODO: ignore times
-
-	return modTimeEqual(st.ModTime(), f.ModTime), nil
-}
-
-func modTimeEqual(a, b time.Time) bool {
-	a = a.Truncate(time.Second)
-	b = b.Truncate(time.Second)
-	return a.Equal(b)
+	return sizeMatch && timeMatch, nil
 }
 
 // rsync/generator.c:recv_generator
