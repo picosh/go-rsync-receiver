@@ -58,7 +58,7 @@ func (rt *Transfer) recvFile1(f *utils.ReceiverFile) error {
 
 func (rt *Transfer) openLocalFile(f *utils.ReceiverFile) (utils.ReaderAtCloser, error) {
 	_, r, err := rt.Files.Read(&utils.SenderFile{
-		Path:    f.Name,
+		WPath:   f.Name,
 		Regular: true,
 	})
 

@@ -40,7 +40,7 @@ func (rt *Transfer) GenerateFiles(fileList []*utils.ReceiverFile) error {
 
 // rsync/generator.c:skip_file
 func (rt *Transfer) skipFile(f *utils.ReceiverFile, st os.FileInfo) (bool, error) {
-	if rt.Opts.AlwaysChecksum {
+	if rt.Opts.AlwaysChecksum || rt.Opts.IgnoreTimes {
 		return false, nil
 	}
 
@@ -49,11 +49,7 @@ func (rt *Transfer) skipFile(f *utils.ReceiverFile, st os.FileInfo) (bool, error
 		return sizeMatch, nil
 	}
 
-	timeMatch := true
-	if !rt.Opts.IgnoreTimes {
-		timeMatch = st.ModTime().Equal(f.ModTime)
-	}
-
+	timeMatch := st.ModTime().Equal(f.ModTime)
 	return sizeMatch && timeMatch, nil
 }
 
@@ -69,7 +65,7 @@ func (rt *Transfer) recvGenerator(idx int, f *utils.ReceiverFile) error {
 	}
 	rt.Logger.Debug("recv_generator", "file", f)
 
-	st, in, err := rt.Files.Read(&utils.SenderFile{Path: f.Name})
+	st, in, err := rt.Files.Read(&utils.SenderFile{WPath: f.Name})
 
 	if !f.FileMode().IsRegular() {
 		// None of the Preserve* options is enabled, so just skip over
