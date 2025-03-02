@@ -65,8 +65,6 @@ func (rt *Transfer) recvGenerator(idx int, f *utils.ReceiverFile) error {
 	}
 	rt.Logger.Debug("recv_generator", "file", f)
 
-	st, in, err := rt.Files.Read(&utils.SenderFile{WPath: f.Name})
-
 	if !f.FileMode().IsRegular() {
 		// None of the Preserve* options is enabled, so just skip over
 		// non-regular files.
@@ -88,10 +86,13 @@ func (rt *Transfer) recvGenerator(idx int, f *utils.ReceiverFile) error {
 		return nil
 	}
 
+	st, in, err := rt.Files.Read(&utils.SenderFile{WPath: f.Name})
 	if err != nil {
 		rt.Logger.Error("failed to open file", "st", st, "file", f, "err", err)
 		return requestFullFile()
 	}
+
+	defer in.Close()
 
 	skip, err := rt.skipFile(f, st)
 	if err != nil {
@@ -116,7 +117,12 @@ func (rt *Transfer) recvGenerator(idx int, f *utils.ReceiverFile) error {
 		return err
 	}
 
-	return rt.generateAndSendSums(in, st.Size())
+	err = rt.generateAndSendSums(in, st.Size())
+	if err != nil {
+		rt.Logger.Error("failed to send sums", "file", f, "err", err)
+	}
+
+	return err
 }
 
 // rsync/generator.c:generate_and_send_sums

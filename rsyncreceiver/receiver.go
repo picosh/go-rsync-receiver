@@ -46,14 +46,16 @@ func (rt *Transfer) recvFile1(f *utils.ReceiverFile) error {
 
 	localFile, err := rt.openLocalFile(f)
 	if err != nil {
-		rt.Logger.Error("opening local file failed, continuing", "err", err)
+		rt.Logger.Error("opening local file failed, continuing", "err", err, "file", f)
 	} else {
 		defer localFile.Close()
 	}
-	if err := rt.receiveData(f, localFile); err != nil {
-		return err
+
+	err = rt.receiveData(f, localFile)
+	if err != nil {
+		rt.Logger.Error("receiving data failed, continuing", "err", err, "file", f)
 	}
-	return nil
+	return err
 }
 
 func (rt *Transfer) openLocalFile(f *utils.ReceiverFile) (utils.ReaderAtCloser, error) {
