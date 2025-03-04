@@ -3,6 +3,7 @@ package rsyncreceiver
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -102,8 +103,6 @@ func (rt *Transfer) receiveData(f *utils.ReceiverFile, localFile utils.ReaderAtC
 	h := md4.New()
 	binary.Write(h, binary.LittleEndian, rt.Seed)
 
-	wr := io.MultiWriter(w, h)
-
 	for {
 		token, data, err := rt.recvToken()
 		if err != nil {
@@ -113,7 +112,14 @@ func (rt *Transfer) receiveData(f *utils.ReceiverFile, localFile utils.ReaderAtC
 			break
 		}
 		if token > 0 {
-			if _, err := wr.Write(data); err != nil {
+			if _, err := h.Write(data); err != nil {
+				return err
+			}
+
+			if _, err := w.Write(data); err != nil {
+				if errors.Is(err, io.ErrClosedPipe) {
+					continue
+				}
 				return err
 			}
 			continue
@@ -132,7 +138,14 @@ func (rt *Transfer) receiveData(f *utils.ReceiverFile, localFile utils.ReaderAtC
 			return err
 		}
 
-		if _, err := wr.Write(data); err != nil {
+		if _, err := h.Write(data); err != nil {
+			return err
+		}
+
+		if _, err := w.Write(data); err != nil {
+			if errors.Is(err, io.ErrClosedPipe) {
+				continue
+			}
 			return err
 		}
 	}
