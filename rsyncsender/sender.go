@@ -146,9 +146,9 @@ func (st *Transfer) receiveSums() (rsync.SumHead, error) {
 }
 
 func (st *Transfer) sendFile(fileIndex int32, fl utils.SenderFile) error {
-	// rsync/rsync.h defines chunkSize as 32 * 1024, but increasing it to 256K
-	// increases throughput with “tridge” rsync as client by 50 Mbit/s.
-	const chunkSize = 256 * 1024
+	// rsync/rsync.h defines CHUNK_SIZE as 32 * 1024. openrsync (tridge)
+	// uses 256K, but standard rsync rejects tokens larger than 32K.
+	const chunkSize = 32 * 1024
 
 	fi, r, err := st.Files.Read(&fl)
 	if err != nil {
